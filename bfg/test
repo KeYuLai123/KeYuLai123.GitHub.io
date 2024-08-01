@@ -1,0 +1,46 @@
+import oss2
+from flask import Flask, request, jsonify, render_template
+# 配置阿里云OSS  
+auth = oss2.Auth('LTAI5tBi3cmV6v5QVvWYsMC2', 'RgrunSeTFfjlaqynqaLOe3HDODlEne')
+bucket = oss2.Bucket(auth, 'oss-cn-beijing.aliyuncs.com', 'test-bfg')
+
+app = Flask(__name__)
+
+
+# 处理跨域请求
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE')
+    return response
+
+
+# 上传文件接口
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'})
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Please select a file'})
+    if file:
+        filename = file.filename
+        oss_path = 'front/' + filename
+        file_size = len(file.read())
+        file.seek(0)
+
+        def percentage(consumed_bytes, total_bytes):
+            if total_bytes:
+                percentage = int(100 * (consumed_bytes / total_bytes))
+                return jsonify({'progress': percentage})
+
+        bucket.put_object(oss_path, file, progress_callback=percentage)
+        share_link = bucket.sign_url('GET', oss_path, 60 * 60)
+        return jsonify({'message': 'Upload successful', 'share_link': share_link, 'filename': filename})
+
+@app.route('/')
+def upload_form():
+    return render_template('index.html')
+if __name__ == '__main__':
+    app.run(debug=True)
